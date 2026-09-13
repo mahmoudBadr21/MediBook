@@ -1,0 +1,6 @@
+export const appointmentStatus = {
+  PENDING: "PENDING",
+  CONFIMED: "CONFIMED",
+  CANCELLED: "CANCELLED",
+  COMPLETED: "COMPLETED"
+}
