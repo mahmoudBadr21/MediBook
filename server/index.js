@@ -8,6 +8,7 @@ import { router as specialtyRouter } from "./src/routes/specialty.route.js"
 import { router as doctorRouter } from './src/routes/doctor.route.js'
 import { router as availabilityRouter } from './src/routes/availability.route.js'
 import { router as appointmentRouter } from './src/routes/appointment.route.js'
+import { router as dashboardRouter } from './src/routes/dashboard.route.js'
 
 configDotenv({
   path: "./src/utils/.env",
@@ -27,6 +28,7 @@ app.use("/api/specialty", specialtyRouter)
 app.use("/api/doctor", doctorRouter)
 app.use("/api/availability", availabilityRouter)
 app.use("/api/appointment", appointmentRouter)
+app.use("/api/dashboard", dashboardRouter)
 
 // global middleware for not found route
 app.use((req, res) => {
