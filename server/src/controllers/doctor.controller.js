@@ -1,4 +1,5 @@
 import Doctor from "../models/doctor.model.js";
+import Specialty from "../models/specialty.model.js";
 import User from "../models/user.model.js";
 import { AppError } from "../utils/appError.js";
 import { asyncWrapper } from "../utils/asyncWrapper.js";
@@ -34,13 +35,13 @@ const activateDoctor = asyncWrapper(async(req, res, next) => {
 })
 
 const getAllDoctor = asyncWrapper(async(req, res, next) => {
-  const doctors = await Doctor.find({}, {"__v": false})
+  const doctors = await Doctor.find({}, {"__v": false}).populate("userId").populate("specialtyId")
   return res.json({status: SUCCESS, data: {doctors}})
 })
 
 const getDoctorById = asyncWrapper(async(req, res, next) => {
   const {doctorId} = req.params
-  const doctor = await Doctor.findById(doctorId)
+  const doctor = await Doctor.findById(doctorId).populate("userId").populate("specialtyId")
   if (!doctor) {
     const error = new AppError("doctor not found", 404, FAIL)
     return next(error)
@@ -50,8 +51,8 @@ const getDoctorById = asyncWrapper(async(req, res, next) => {
 })
 
 const getMyProfile = asyncWrapper(async(req, res, next) => {
-  const doctorId = req.currentUser._id
-  const doctor = await Doctor.findById(doctorId)
+  const doctorId = req.currentUser.id
+  const doctor = await Doctor.findOne({userId: doctorId})
   if (!doctor) {
     const error = new AppError("doctor not found", 404, FAIL)
     return next(error)
@@ -68,11 +69,6 @@ const deleteDoctor = asyncWrapper(async(req, res, next) => {
     return next(error)
   }
 
-  if (doctor.role != userRoles.DOCTOR) {
-    const error = new AppError("this user is not a doctor", 404, FAIL)
-    return next(error)
-  }
-
   await doctor.deleteOne()
   return res.json({status: SUCCESS, data: null})
 })
@@ -85,13 +81,23 @@ const updateDoctor = asyncWrapper(async(req, res, next) => {
     return next(error)
   }
 
-  if (doctor.role != userRoles.DOCTOR) {
-    const error = new AppError("this user is not a doctor", 404, FAIL)
-    return next(error)
+  if (!doctor.specialtyId) {
+    const { specialtyId } = req.body;
+    if (!specialtyId) {
+      const error = new AppError("specialty required", 400, FAIL)
+      return next(error)
+    }
+    const specialty = await Specialty.findById(specialtyId)
+    if (!specialty) {
+      const error = new AppError("specialty not found", 404, FAIL)
+      return next(error)
+    }
   }
 
-  const updatedDoctor = await doctor.updateOne({...req.body})
-  return res.json({status: SUCCESS, data: {updatedDoctor}})
+const updatedDoctor = await Doctor.findOneAndUpdate(doctor._id,
+  { $set: { ...req.body } },
+  { returnDocument: 'after', runValidators: true }
+);  return res.json({status: SUCCESS, data: {updatedDoctor}})
 })
 
 const verifyDoctor = asyncWrapper(async(req, res, next) => {
@@ -102,13 +108,8 @@ const verifyDoctor = asyncWrapper(async(req, res, next) => {
     return next(error)
   }
 
-  if (doctor.role != userRoles.DOCTOR) {
-    const error = new AppError("this user is not a doctor", 404, FAIL)
-    return next(error)
-  }
-
   if(doctor.isVerified) {
-    const error = new AppError("this doctor is not already verify", 404, FAIL)
+    const error = new AppError("this doctor is not already verify", 400, FAIL)
     return next(error)
   }
 

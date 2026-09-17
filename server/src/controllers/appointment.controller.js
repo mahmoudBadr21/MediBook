@@ -1,13 +1,14 @@
+
 import Appointment from "../models/appointment.model.js";
 import Availability from "../models/availability.model.js";
 import Doctor from "../models/doctor.model.js";
 import { AppError } from "../utils/appError.js";
 import { asyncWrapper } from "../utils/asyncWrapper.js";
 import { FAIL, SUCCESS } from "../utils/httpSatutsText.js";
-import { appointmentStatus, CANCELLED } from "../utils/appointmentStatus.js"
+import { appointmentStatus } from "../utils/appointmentStatus.js"
 
 const createAppointment = asyncWrapper(async (req, res, next) => {
-  const patientId = req.currentUser._id
+  const patientId = req.currentUser.id
   const { doctorId, date, startTime } = req.body
 
   const doctor = await Doctor.findById(doctorId)
@@ -32,7 +33,6 @@ const createAppointment = asyncWrapper(async (req, res, next) => {
     return next(error)
   }
 
-  // 2. منع الحجز في تاريخ ماضي (Past Date)
   const now = new Date()
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const appointmentDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate())
@@ -42,7 +42,6 @@ const createAppointment = asyncWrapper(async (req, res, next) => {
     return next(error)
   }
 
-  // 3. منع حجز شريحة زمنية مرت بالفعل اليوم (Past Slot)
   const [reqHour, reqMinute] = startTime.split(":").map(Number)
   if (isNaN(reqHour) || isNaN(reqMinute)) {
     const error = new AppError("invalid time format, use HH:mm", 400, FAIL)
@@ -60,7 +59,6 @@ const createAppointment = asyncWrapper(async (req, res, next) => {
     }
   }
 
-  // 4. التحقق من جدول إتاحة الطبيب
   const dayOfWeek = selectedDate.toLocaleDateString("en-US", { weekday: "long" })
   const availability = await Availability.find({
     doctor: doctorId,
@@ -96,12 +94,11 @@ const createAppointment = asyncWrapper(async (req, res, next) => {
     return next(error)
   }
 
-  // 5. التحقق من عدم التعارض قبل الحفظ (Double Booking Check)
   const existingAppointment = await Appointment.findOne({
     doctorId: doctorId,
     date: appointmentDate,
     startTime,
-    status: { $ne: "cancelled" }
+    status: { $ne: appointmentStatus.CANCELLED }
   })
 
   if (existingAppointment) {
@@ -109,10 +106,9 @@ const createAppointment = asyncWrapper(async (req, res, next) => {
     return next(error)
   }
 
-  // 6. إنشاء الحجز مع معالجة حماية الـ Unique Index في قاعدة البيانات
   try {
     const appointment = await Appointment.create({
-      userId: patientId, // مطابقة اسم الحقل في الـ Index
+      userId: patientId,
       doctorId: doctorId,
       date: appointmentDate,
       startTime,
@@ -126,7 +122,6 @@ const createAppointment = asyncWrapper(async (req, res, next) => {
       }
     })
   } catch (err) {
-    // التقاط خطأ الـ Unique Index لمنع الحجز المزدوج في حالة الطلبات المتزامنة (Race Condition)
     if (err.code === 11000) {
       const error = new AppError("this slot has just been booked by another user", 400, FAIL)
       return next(error)
@@ -136,8 +131,19 @@ const createAppointment = asyncWrapper(async (req, res, next) => {
 })
 
 const getMyAppointments = asyncWrapper(async(req, res) => {
-  const patientId = req.currentUser._id
-  const appointments = await Appointment.find({userId: patientId}).populate("doctorId")
+  const patientId = req.currentUser.id
+  const appointments = await Appointment.find({userId: patientId}).populate({
+    path: "doctorId",
+    select: "userId specialtyId experience bio consultationPrice education licenseNumber",
+    populate: {
+      path: "userId",
+      select: "firstName lastName email phone avatar"
+    },
+    populate: {
+      path: "specialtyId",
+      select: "name"
+    }
+  })
   res.status(200).json({
     status: SUCCESS,
     data: {
@@ -147,14 +153,17 @@ const getMyAppointments = asyncWrapper(async(req, res) => {
 })
 
 const getDoctorAppointments = asyncWrapper(async(req, res, next) => {
-  const doctorId = req.currentUser._id
-  const doctor = await Doctor.findOne({userId: doctorId})
+  const userId = req.currentUser.id
+  const doctor = await Doctor.findOne({userId})
   if (!doctor) {
     const error = new AppError("doctor not found", 404, FAIL)
     return next(error)
   }
 
-  const appointments = await Appointment.find({doctorId}).populate("userId")
+  const appointments = await Appointment.find({doctorId: doctor._id}).populate({
+    path: "userId",
+    select: "firstName lastName email phone avatar"
+  })
   res.status(200).json({
     status: SUCCESS,
     data: {
@@ -177,12 +186,12 @@ const cancelAppointment = asyncWrapper(async(req, res, next) => {
     return next(error)
   }
 
-  if (appointment.status != CANCELLED) {
+  if (appointment.status != appointmentStatus.CANCELLED) {
     const error = new AppError("this appointment is already cancelled", 401, FAIL)
     return next(error)
   }
 
-  appointment.status = CANCELLED
+  appointment.status = appointmentStatus.CANCELLED
   await appointment.save()
 
   res.status(200).json({

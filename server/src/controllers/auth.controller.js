@@ -7,9 +7,27 @@ import { SUCCESS, FAIL } from "../utils/httpSatutsText.js";
 import { genarateJWT } from '../utils/genarateJWT.js'
 
 const getAllUsers = asyncWrapper(async (req, res) => {
-  const users = User.find({}, {"__v": false, "password": false})
-  return res.json({status: SUCCESS, data: {data}})
-})
+  const page = parseInt(req.query.page, 10) || 1;
+  const limit = parseInt(req.query.limit, 10) || 10;
+  const skip = (page - 1) * limit;
+
+  const totalUsers = await User.countDocuments();
+
+  const users = await User.find({}, { "__v": false, "password": false })
+    .limit(limit)
+    .skip(skip);
+
+  return res.status(200).json({
+    status: SUCCESS,
+    data: {
+      totalUsers,
+      currentPage: page,
+      totalPages: Math.ceil(totalUsers / limit),
+      limit,
+      users
+    }
+  });
+});
 
 const register = asyncWrapper(async (req, res, next) => {
   const errors = validationResult(req)
@@ -135,10 +153,68 @@ const getMe = asyncWrapper(async (req, res) => {
   res.status(200).json({status: SUCCESS, data: req.currentUser})
 })
 
+const changePassword = asyncWrapper(async (req, res, next) => {
+  const {id, currentPass, newPass, confirmNewPass} = req.body
+  const user = await User.findOne({_id: id})
+  if (!user) {
+    const error = AppError.create("user not found", 404, FAIL)
+    return next(error)
+  }
+
+  const matchPassword = await bcrypt.compare(currentPass, user.password)
+  if (!matchPassword) {
+    const error = AppError.create("current password is incorrect", 400, FAIL)
+    return next(error)
+  }
+
+  if (newPass !== confirmNewPass) {
+    const error = AppError.create("password is not identical", 400, FAIL)
+    return next(error)
+  }
+
+  const isSamePassword = await bcrypt.compare(newPass, user.password)
+  if (isSamePassword) {
+    const error = AppError.create("new password must be different", 400, FAIL)
+    return next(error)
+  }
+
+  const hashedNewPassword = await bcrypt.hash(newPass, 10)
+  user.password = hashedNewPassword
+
+  await user.save()
+  res.status(200).json({ status: SUCCESS, user });
+})
+
+const updateRole = asyncWrapper(async (req, res, next) => {
+  const { email, role } = req.body;
+  if (!email || !role) {
+    const error = AppError.create("email and role is required", 400, FAIL)
+    return next(error)
+  }
+
+  const user = await User.findOne({email: email})
+  if (!user) {
+    const error = AppError.create("user not found", 404, FAIL)
+    return next(error)
+  }
+
+  const lastRole = user.role
+  if (role === lastRole) {
+    const error = AppError.create(`this user is already ${lastRole}`, 400, FAIL)
+    return next(error)
+  }
+
+  user.role = role
+  await user.save()
+  res.status(200).json({ status: "success", user });
+})
+
 export {
   getAllUsers,
   register,
   login,
   logout,
-  getMe
+  getMe,
+  changePassword,
+  updateRole
 }

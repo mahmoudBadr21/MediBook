@@ -6,7 +6,7 @@ const availabilityValidation = () => {
     body("dayOfWeek")
       .notEmpty().withMessage("day is required")
       .isString().withMessage("day must be string")
-      .isIn(["sunday", "monday", "tuesday", "wednesday", "thursday", "firday", "saturday"],)
+      .isIn(["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"])
       .withMessage("day is not right"),
     body("startTime")
       .notEmpty().withMessage("start time is required")

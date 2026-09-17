@@ -8,8 +8,8 @@ import { userRoles } from "../utils/userRoles.js"
 
 const router = express.Router()
 
-router.route("/")
-  .get(allowedTo(userRoles.ADMIN), verifyToken, usersController.getAllUsers)
+router.route("/users")
+  .get(verifyToken, allowedTo(userRoles.ADMIN), usersController.getAllUsers)
 
 router.route("/register")
   .post(registerValidation(), usersController.register)
@@ -22,5 +22,11 @@ router.route("/logout")
 
 router.route("/me")
   .get(verifyToken, usersController.getMe)
+
+router.route("/changePassword")
+  .post(verifyToken, usersController.changePassword)
+
+router.route("/updateRole")
+  .patch(verifyToken, allowedTo(userRoles.ADMIN), usersController.updateRole)
 
 export { router }

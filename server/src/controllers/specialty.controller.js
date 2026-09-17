@@ -40,7 +40,7 @@ const deleteSpecialty = asyncWrapper(async (req, res, next) => {
 
 const updateSpecialty = asyncWrapper(async (req, res, next) => {
   const {specialtyId} = req.params
-  const specialty = await Specialty.findByIdAndUpdate(specialtyId, {$set: {...req.body}})
+  const specialty = await Specialty.findByIdAndUpdate(specialtyId, {$set: {...req.body}}, {returnDocument: 'after', runValidators: true})
   if (!specialty) {
     const error = new AppError("This specialty not found", 404, FAIL)
     return next(error)

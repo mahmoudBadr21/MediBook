@@ -3,26 +3,25 @@ import Availability from "../models/availability.model.js";
 import Doctor from "../models/doctor.model.js";
 import { AppError } from "../utils/appError.js";
 import { asyncWrapper } from "../utils/asyncWrapper.js";
+import { FAIL, SUCCESS } from "../utils/httpSatutsText.js";
 
 const createAvailability = asyncWrapper(async(req, res, next) => {
-  const userId = req.currentUser._id
-  const doctor = await Doctor.findOne({user: userId})
+  const errors = validationResult(req)
+  if (!errors.isEmpty()) {
+    const messages = errors.array().map(err => err.msg).join(', ')
+    const error = new AppError(messages, 400, FAIL)
+    return next(error)
+  }
+  const userId = req.currentUser.id
+  const doctor = await Doctor.findOne({userId})
   if (!doctor) {
     const error = new AppError("doctor not found", 404, FAIL)
     return next(error)
   }
 
-  const errors = validationResult(req)
-    if (!errors.isEmpty()) {
-      const messages = errors.array().map(err => err.msg).join(', ')
-      const error = new AppError(messages, 400, FAIL)
-      return next(error)
-    }
-
   const { dayOfWeek, startTime, endTime, slotDuration } = req.body
 
   const conflict = await Availability.findOne({
-    _id: {$ne : availability._id},
     doctor: doctor._id,
     dayOfWeek,
     startTime: {$lt: endTime},
@@ -44,8 +43,8 @@ const createAvailability = asyncWrapper(async(req, res, next) => {
 })
 
 const getMyAvailability = asyncWrapper(async (req, res, next) => {
-  const userId = req.currentUser._id
-  const doctor = await Doctor.findOne({user: userId})
+  const userId = req.currentUser.id
+  const doctor = await Doctor.findOne({userId})
   if (!doctor) {
     const error = new AppError("doctor not found", 404, FAIL)
     return next(error)
@@ -63,7 +62,7 @@ const deleteAvailability = asyncWrapper(async (req, res, next) => {
     return next(error)
   }
 
-  const doctor = await Doctor.findOne({user: req.currentUser._id})
+  const doctor = await Doctor.findOne({userId: req.currentUser.id})
   if (availability.doctor == doctor._id) {
     const error = new AppError("doctor not have this availability", 400, FAIL)
     return next(error)
@@ -74,43 +73,51 @@ const deleteAvailability = asyncWrapper(async (req, res, next) => {
 })
 
 const updateAvailability = asyncWrapper(async (req, res, next) => {
-  const { availabilityId } = req.params
-  const availability = await Availability.findById(availabilityId)
-  if (!availability) {
-    const error = new AppError("availability not found", 404, FAIL)
-    return next(error)
-  }
-
-  const doctor = await Doctor.findOne({user: req.currentUser._id})
-  if (!equals(availability.doctor, doctor._id)) {
-    const error = new AppError("doctor not have this availability", 400, FAIL)
-    return next(error)
-  }
-
-  const { dayOfWeek, startTime, endTime, slotDuration } = req.body
-
-  const errors = validationResult(req)
+  const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    const messages = errors.array().map(err => err.msg).join(', ')
-    const error = new AppError(messages, 400, FAIL)
-    return next(error)
+    const messages = errors.array().map(err => err.msg).join(', ');
+    const error = new AppError(messages, 400, FAIL);
+    return next(error);
   }
+
+  const { availabilityId } = req.params;
+  const availability = await Availability.findById(availabilityId);
+  if (!availability) {
+    const error = new AppError("availability not found", 404, FAIL);
+    return next(error);
+  }
+
+  const doctor = await Doctor.findOne({ userId: req.currentUser.id });
+  if (!doctor || !availability.doctor.equals(doctor._id)) {
+    const error = new AppError("doctor does not have this availability", 403, FAIL);
+    return next(error);
+  }
+
+  const dayOfWeek = req.body.dayOfWeek || availability.dayOfWeek;
+  const startTime = req.body.startTime || availability.startTime;
+  const endTime = req.body.endTime || availability.endTime;
 
   const conflict = await Availability.findOne({
-    _id: {$ne : availability._id},
+    _id: { $ne: availability._id },
     doctor: doctor._id,
     dayOfWeek,
-    startTime: {$lt: endTime},
-    endTime: {$gt: startTime}
-  })
+    startTime: { $lt: endTime },
+    endTime: { $gt: startTime }
+  });
+
   if (conflict) {
-    const error = new AppError("this availability conflicts with another availability", 400, FAIL)
-    return next(error)
+    const error = new AppError("this availability conflicts with another availability", 400, FAIL);
+    return next(error);
   }
 
-  const updatedAvailability = await availability.updateOne({...req.body})
-  return res.json({status: SUCCESS, data: {updatedAvailability}})
-})
+  const updatedAvailability = await Availability.findByIdAndUpdate(
+    availabilityId,
+    { $set: req.body },
+    { returnDocument: 'after', runValidators: true }
+  );
+
+  return res.status(200).json({ status: SUCCESS, data: { updatedAvailability } });
+});
 
 const getDoctorAvailability = asyncWrapper(async (req, res, next) => {
   const { doctorId } = req.params
