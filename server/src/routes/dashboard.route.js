@@ -1,12 +1,8 @@
-import express from 'express'
-import * as dashboardController from '../controllers/dashboard.controller.js'
-import { verifyToken } from '../middlewares/verifyToken.js'
-import { allowedTo } from '../middlewares/allowedTo.js'
-import { userRoles } from '../utils/userRoles.js'
+import { Router } from "express";
+import * as dashboardController from "../controllers/dashboard.controller.js";
 
-const router = express.Router()
+const router = Router();
 
-router.route("/dashboardStats")
-  .get(verifyToken, allowedTo(userRoles.ADMIN), dashboardController.getDashboardStats)
+router.get("/dashboardStats", dashboardController.getDashboardStats);
 
-export { router }
+export { router };

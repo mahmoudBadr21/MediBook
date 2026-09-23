@@ -6,25 +6,45 @@ import { userRoles } from "../utils/userRoles.js";
 
 const router = Router()
 
-router.route("/")
-  .get(doctorController.getAllDoctor)
+router.get("/", doctorController.getAllDoctor);
 
-router.route("/:userId/activate")
-  .patch(verifyToken, allowedTo(userRoles.ADMIN), doctorController.activateDoctor)
+router.get(
+  "/doctorProfile",
+  verifyToken,
+  allowedTo(userRoles.DOCTOR),
+  doctorController.getMyProfile,
+);
 
-router.route("/:doctorId/getDoctor")
-  .get(doctorController.getDoctorById)
+router.get("/search", doctorController.searchDoctors);
 
-router.route("/doctorProfile")
-  .get(verifyToken, allowedTo(userRoles.DOCTOR), doctorController.getMyProfile)
+router.get("/:doctorId/getDoctor", doctorController.getDoctorById);
 
-router.route("/:doctorId/deleteDoctor")
-  .delete(verifyToken, allowedTo(userRoles.ADMIN), doctorController.deleteDoctor)
+router.delete(
+  "/:doctorId/deleteDoctor",
+  verifyToken,
+  allowedTo(userRoles.ADMIN),
+  doctorController.deleteDoctor,
+);
 
-router.route("/:doctorId/updateDoctor")
-  .patch(verifyToken, allowedTo(userRoles.DOCTOR), doctorController.updateDoctor)
+router.patch(
+  "/:userId/activate",
+  verifyToken,
+  allowedTo(userRoles.ADMIN),
+  doctorController.activateDoctor,
+);
 
-router.route("/:doctorId/verifyDoctor")
-  .patch(verifyToken, allowedTo(userRoles.ADMIN), doctorController.verifyDoctor)
+router.patch(
+  "/:doctorId/updateDoctor",
+  verifyToken,
+  allowedTo(userRoles.DOCTOR),
+  doctorController.updateDoctor,
+);
+
+router.patch(
+  "/:doctorId/verifyDoctor",
+  verifyToken,
+  allowedTo(userRoles.ADMIN),
+  doctorController.verifyDoctor,
+);
 
 export { router }

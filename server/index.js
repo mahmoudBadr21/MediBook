@@ -3,12 +3,17 @@ import mongoose from 'mongoose'
 import cookieParser from 'cookie-parser'
 import { configDotenv } from 'dotenv'
 import { ERROR } from './src/utils/httpSatutsText.js'
+import { verifyToken } from './src/middlewares/verifyToken.js'
+import { allowedTo } from './src/middlewares/allowedTo.js'
+import { userRoles } from './src/utils/userRoles.js'
 import { router as authRouter } from "./src/routes/auth.route.js"
 import { router as specialtyRouter } from "./src/routes/specialty.route.js"
 import { router as doctorRouter } from './src/routes/doctor.route.js'
 import { router as availabilityRouter } from './src/routes/availability.route.js'
 import { router as appointmentRouter } from './src/routes/appointment.route.js'
 import { router as dashboardRouter } from './src/routes/dashboard.route.js'
+import { router as doctorDashboardRouter } from './src/routes/doctorDashboard.route.js'
+import { router as patientDashboardRouter } from './src/routes/patientDashboard.route.js'
 
 configDotenv({
   path: "./src/utils/.env",
@@ -28,7 +33,9 @@ app.use("/api/specialty", specialtyRouter)
 app.use("/api/doctor", doctorRouter)
 app.use("/api/availability", availabilityRouter)
 app.use("/api/appointment", appointmentRouter)
-app.use("/api/dashboard", dashboardRouter)
+app.use("/api/dashboard", verifyToken, allowedTo(userRoles.ADMIN), dashboardRouter)
+app.use("/api/doctorDashboard", verifyToken, allowedTo(userRoles.DOCTOR), doctorDashboardRouter)
+app.use("/api/patientDashboard", verifyToken, allowedTo(userRoles.PATIENT), patientDashboardRouter)
 
 // global middleware for not found route
 app.use((req, res) => {
@@ -39,8 +46,6 @@ app.use((req, res) => {
 // global error handler
 app.use((err, req, res, next) => {
   console.log("global error handler");
-  console.log(err);
-  
   return res.status(err.statusCode || 500).json({
     statusText: err.statusText || ERROR,
     message: err.message,
