@@ -1,4 +1,7 @@
 import express from 'express'
+import helmet from 'helmet'
+import cors from 'cors'
+import rateLimit from 'express-rate-limit'
 import mongoose from 'mongoose'
 import cookieParser from 'cookie-parser'
 import { configDotenv } from 'dotenv'
@@ -21,21 +24,78 @@ configDotenv({
 })
 const app = express()
 
-const dataBaseURL = process.env.MONGO_URI
-mongoose.connect(dataBaseURL).then(() => console.log("mongodb server started"))
+app.use(helmet());
 
-app.use(cookieParser())
+const allowedOrigins = [
+  "http://localhost:3000",
+  "https://yourdomain.com",
+  "https://admin.yourdomain.com"
+];
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+};
+app.use(cors(corsOptions));
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    status: "FAIL",
+    message: "Too many login/auth attempts, please try again after 15 minutes."
+  }
+});
+
+const dashboardLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 150,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    status: "FAIL",
+    message: "Too many requests to the dashboard, please slow down."
+  }
+});
+
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    status: "FAIL",
+    message: "Too many requests, please try again later."
+  }
+});
+
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }));
 
-app.use("/api/auth", authRouter)
-app.use("/api/specialty", specialtyRouter)
-app.use("/api/doctor", doctorRouter)
-app.use("/api/availability", availabilityRouter)
-app.use("/api/appointment", appointmentRouter)
-app.use("/api/dashboard", verifyToken, allowedTo(userRoles.ADMIN), dashboardRouter)
-app.use("/api/doctorDashboard", verifyToken, allowedTo(userRoles.DOCTOR), doctorDashboardRouter)
-app.use("/api/patientDashboard", verifyToken, allowedTo(userRoles.PATIENT), patientDashboardRouter)
+app.use(cookieParser())
+
+const dataBaseURL = process.env.MONGO_URI
+mongoose.connect(dataBaseURL).then(() => console.log("mongodb server started"))
+
+app.use("/api/auth", authLimiter, authRouter)
+
+app.use("/api/specialty", apiLimiter, specialtyRouter)
+app.use("/api/doctor", apiLimiter, doctorRouter)
+app.use("/api/availability", apiLimiter, availabilityRouter)
+app.use("/api/appointment", apiLimiter, appointmentRouter)
+
+app.use("/api/dashboard", dashboardLimiter, verifyToken, allowedTo(userRoles.ADMIN), dashboardRouter)
+app.use("/api/doctorDashboard", dashboardLimiter, verifyToken, allowedTo(userRoles.DOCTOR), doctorDashboardRouter)
+app.use("/api/patientDashboard", dashboardLimiter, verifyToken, allowedTo(userRoles.PATIENT), patientDashboardRouter)
 
 // global middleware for not found route
 app.use((req, res) => {

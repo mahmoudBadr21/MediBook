@@ -4,6 +4,7 @@ import { allowedTo } from "../middlewares/allowedTo.js";
 import { userRoles } from "../utils/userRoles.js";
 import { verifyToken } from "../middlewares/verifyToken.js";
 import { availabilityValidation } from "../middlewares/availabilityValidation.js";
+import { validateObjectId } from '../middlewares/validateObjectId.js'
 
 const router = Router();
 
@@ -22,19 +23,22 @@ router.get(
   availabilityController.getMyAvailability,
 );
 
-router.get("/:doctorId", availabilityController.getDoctorAvailability);
+router.get("/:doctorId", validateObjectId("doctorId"), availabilityController.getDoctorAvailability);
 
-router.get("/:doctorId/slots", availabilityController.generateAvailableSlots);
+router.get("/:doctorId/slots", validateObjectId("doctorId"), availabilityController.generateAvailableSlots);
 
 router.route("/:availabilityId")
   .delete(
     verifyToken,
     allowedTo(userRoles.DOCTOR),
+    validateObjectId("availabilityId"),
     availabilityController.deleteAvailability,
   )
+
   .patch(
     verifyToken,
     allowedTo(userRoles.DOCTOR),
+    validateObjectId("availabilityId"),
     availabilityController.updateAvailability,
   );
 
